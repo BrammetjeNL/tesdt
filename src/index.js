@@ -330,10 +330,22 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ---------- Start ----------
+console.log(`ENV check: DISCORD_TOKEN ${process.env.DISCORD_TOKEN ? "aanwezig ✅" : "ONTBREEKT ❌"}, CLIENT_ID ${process.env.CLIENT_ID ? "aanwezig ✅" : "ONTBREEKT ❌"}`);
 if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
-  console.error("❌ Zet DISCORD_TOKEN en CLIENT_ID in je .env (zie .env.example)");
+  console.error("❌ Zet DISCORD_TOKEN en CLIENT_ID als Environment Variables in Render (Environment tab), niet alleen in .env");
   process.exit(1);
 }
 
-await registerCommands();
-client.login(process.env.DISCORD_TOKEN);
+try {
+  await registerCommands();
+  await client.login(process.env.DISCORD_TOKEN);
+} catch (e) {
+  console.error("❌ Bot kon niet inloggen/starten:", e?.message ?? e);
+  if (String(e?.message ?? "").includes("disallowed intents")) {
+    console.error("→ Zet in Discord Developer Portal onder Bot geen privileged intents aan (deze bot heeft alleen Guilds nodig).");
+  }
+  if (String(e?.code ?? "") === "TokenInvalid" || String(e?.message ?? "").includes("invalid token")) {
+    console.error("→ Je DISCORD_TOKEN is ongeldig/verlopen. Maak een nieuwe via Developer Portal → Bot → Reset Token en update hem in Render.");
+  }
+  process.exit(1);
+}
