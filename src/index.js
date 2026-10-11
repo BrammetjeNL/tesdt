@@ -174,9 +174,19 @@ const commands = [
 ];
 
 async function registerCommands() {
+  console.log("→ Slash commands registreren bij Discord API...");
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
-  console.log("✓ Slash commands geregistreerd: /queue start|stop|list|clear, /next");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  try {
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
+      body: commands,
+      signal: controller.signal,
+    });
+    console.log("✓ Slash commands geregistreerd: /queue start|stop|list|clear, /next");
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---------- Client ----------
@@ -330,7 +340,10 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ---------- Start ----------
+console.log(`Node ${process.version}`);
 console.log(`ENV check: DISCORD_TOKEN ${process.env.DISCORD_TOKEN ? "aanwezig ✅" : "ONTBREEKT ❌"}, CLIENT_ID ${process.env.CLIENT_ID ? "aanwezig ✅" : "ONTBREEKT ❌"}`);
+process.on("unhandledRejection", (e) => console.error("❌ Unhandled rejection:", e?.message ?? e));
+
 if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
   console.error("❌ Zet DISCORD_TOKEN en CLIENT_ID als Environment Variables in Render (Environment tab), niet alleen in .env");
   process.exit(1);
@@ -338,7 +351,15 @@ if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
 
 try {
   await registerCommands();
+} catch (e) {
+  // Registreren mag de login nooit blokkeren: ook zonder (nieuwe) commands kan de bot online komen
+  console.error("⚠️ Slash commands registreren mislukt, log toch in:", e?.message ?? e);
+}
+
+try {
+  console.log("→ Inloggen bij Discord...");
   await client.login(process.env.DISCORD_TOKEN);
+  console.log("→ Login verstuurd, wachten op ready...");
 } catch (e) {
   console.error("❌ Bot kon niet inloggen/starten:", e?.message ?? e);
   if (String(e?.message ?? "").includes("disallowed intents")) {
